@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure File Downloader</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <script src='//libtl.com/sdk.js' data-zone='11246502' data-sdk='show_11246502'></script>
+
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -43,7 +46,7 @@
             text-decoration: none;
             box-sizing: border-box;
         }
-        .btn-smartlink { background-color: #ff9f0a; color: white; display: none; }
+        .btn-smartlink { background-color: #ff9f0a; color: white; }
         .btn-final { background-color: #30d158; color: white; }
     </style>
 </head>
@@ -58,7 +61,7 @@
         <span id="countdown" class="timer">10</span> seconds
     </div>
 
-    <a id="smartlink-btn" class="btn btn-smartlink" href="#" target="_blank" onclick="onAdClicked()">🔓 Unlock Your File</a>
+    <button id="smartlink-btn" class="btn btn-smartlink" onclick="triggerPopkornAd()">🔓 Unlock Your File</button>
 
     <button id="final-btn" class="btn btn-final" onclick="redirectToBot()">📥 Get File (Back to Bot)</button>
 </div>
@@ -67,10 +70,7 @@
     const tg = window.Telegram.WebApp;
     tg.expand();
 
-    // 🔴 APNA MONETAG SMARTLINK YAHAN PASTE KAREIN 🔴
-    const MONETAG_SMARTLINK = "https://vxmlp.com/your-smartlink-placeholder"; 
     const BOT_USERNAME = "Hotpopkornbot"; 
-
     const urlParams = new URLSearchParams(window.location.search);
     const fileId = urlParams.get('fid');
 
@@ -79,8 +79,6 @@
     const timerSection = document.getElementById('timer-section');
     const smartlinkBtn = document.getElementById('smartlink-btn');
     const finalBtn = document.getElementById('final-btn');
-
-    smartlinkBtn.href = MONETAG_SMARTLINK;
 
     // 10 Second Timer Logic
     const timer = setInterval(() => {
@@ -94,12 +92,25 @@
         }
     }, 1000);
 
-    // Jab user Monetag link par click karega
-    function onAdClicked() {
-        setTimeout(() => {
+    // 🟢 2. MONETAG AD KO SHOW KARNE KA LOGIC 🟢
+    function triggerPopkornAd() {
+        // Monetag SDK native promise provide karta hai jab user ad close ya click karta hai
+        if (typeof show_11246502 === 'function') {
+            show_11246502().then(() => {
+                // Ad successfully complete hote hi download button show hoga
+                smartlinkBtn.style.display = 'none'; 
+                finalBtn.style.display = 'block';
+            }).catch((err) => {
+                // Safe Fallback: Agar ad me error aaye toh bhi user ka download button block na ho
+                console.log("Ad Error:", err);
+                smartlinkBtn.style.display = 'none'; 
+                finalBtn.style.display = 'block';
+            });
+        } else {
+            // Agar ad block ho ya load na hua ho
             smartlinkBtn.style.display = 'none'; 
-            finalBtn.style.display = 'block'; 
-        }, 1500); 
+            finalBtn.style.display = 'block';
+        }
     }
 
     // Bot me wapas redirect karne ke liye
