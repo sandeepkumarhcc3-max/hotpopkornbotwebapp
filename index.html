@@ -18,12 +18,11 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: space-between; /* Isse ads upar aur niche fix rahenge */
+            justify-content: space-between; 
             height: 95vh;
             text-align: center;
             box-sizing: border-box;
         }
-        /* Upar aur Niche ke Ad Containers */
         .ad-container-top, .ad-container-bottom {
             width: 100%;
             min-height: 60px;
@@ -42,7 +41,7 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
             width: 90%;
             max-width: 400px;
-            margin: auto 0; /* Center content between ads */
+            margin: auto 0; 
         }
         h2 { margin-bottom: 10px; color: #0a84ff; }
         .status { font-size: 16px; margin: 20px 0; color: #eaeaea; }
@@ -76,7 +75,7 @@
     
     <div id="timer-section" class="status">
         Checking secure link... <br>
-        <span id="countdown" class="timer">10</span> seconds
+        <span id="countdown" class="timer">25</span> seconds
     </div>
 
     <button id="smartlink-btn" class="btn btn-smartlink" onclick="triggerPopkornAd()">🔓 Unlock Your File</button>
@@ -96,13 +95,14 @@
     const urlParams = new URLSearchParams(window.location.search);
     const fileId = urlParams.get('fid');
 
-    let timeLeft = 10;
+    // Timer ko 10 se badalkar 25 kar diya gaya hai
+    let timeLeft = 25;
     const countdownEl = document.getElementById('countdown');
     const timerSection = document.getElementById('timer-section');
     const smartlinkBtn = document.getElementById('smartlink-btn');
     const finalBtn = document.getElementById('final-btn');
 
-    // 10 Second Timer Logic
+    // 25 Second Timer Logic
     const timer = setInterval(() => {
         timeLeft--;
         countdownEl.innerText = timeLeft;
@@ -114,15 +114,26 @@
         }
     }, 1000);
 
-    // Page load hote hi upar aur neeche banner ads show karne ka call
+    // Page load hote hi In-App Interstitial Ad aur baki ads initialize karne ke liye
     window.onload = function() {
         if (typeof show_11246502 === 'function') {
-            // Yeh aapke app ke loading ke sath hi banners ko background me fetch kar lega
-            console.log("Monetag Banner Ads Initialized");
+            console.log("Monetag Ads Initialized");
+            
+            // Aapka diya hua In-App Interstitial Code
+            show_11246502({
+              type: 'inApp',
+              inAppSettings: {
+                frequency: 2,
+                capping: 0.1,
+                interval: 30,
+                timeout: 5, // 5 seconds ke delay ke baad automatic show hoga
+                everyPage: false
+              }
+            });
         }
     };
 
-    // UNLOCK BUTTON CLICK LOGIC (Popup Ad)
+    // UNLOCK BUTTON CLICK LOGIC
     function triggerPopkornAd() {
         if (typeof show_11246502 === 'function') {
             show_11246502().then(() => {
@@ -153,4 +164,3 @@
 
 </body>
 </html>
-
