@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure File Downloader</title>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
     <style>
@@ -68,7 +72,160 @@
 
 <script>
     const tg = window.Telegram.WebApp;
-    tg.expand();
+    try { tg.expand(); } catch(e) {}
+
+    // 1. Firebase Realtime Database Config & Initialization
+    const firebaseConfig = {
+      databaseURL: "https://popkornflix-default-rtdb.firebaseio.com"
+    };
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.database();
+
+    // 2. Redirect Links State & Rotation Engine
+    let activeRedirectUrls = [];
+    let defaultRedirectUrl = localStorage.getItem('_pk_default_redirect_url') || 'https://t.me/Hotpopkornbot';
+
+    // Instant local cache initialization for zero latency
+    try {
+      const cached = localStorage.getItem('_pk_download_redirects');
+      if (cached) {
+        const val = JSON.parse(cached);
+        if (val && typeof val === 'object') {
+          activeRedirectUrls = Object.values(val).filter(item => item && item.url && item.active !== false);
+        }
+      }
+    } catch(e) {}
+
+    // Realtime listeners from Firebase
+    db.ref('settings/download_redirects').on('value', snapshot => {
+      const val = snapshot.val();
+      if (val && typeof val === 'object') {
+        try { localStorage.setItem('_pk_download_redirects', JSON.stringify(val)); } catch(e) {}
+        activeRedirectUrls = Object.values(val).filter(item => item && item.url && item.active !== false);
+      } else {
+        activeRedirectUrls = [];
+      }
+    }, err => {
+      console.warn('Firebase download_redirects read error:', err.message);
+    });
+
+    db.ref('settings/active_redirect_url').on('value', snapshot => {
+      const url = snapshot.val();
+      if (url && typeof url === 'string') {
+        defaultRedirectUrl = url;
+        try { localStorage.setItem('_pk_default_redirect_url', url); } catch(e) {}
+      }
+    });
+
+    function getSelectedRedirectUrl() {
+      if (activeRedirectUrls.length > 0) {
+        const randomIndex = Math.floor(Math.random() * activeRedirectUrls.length);
+        const selected = activeRedirectUrls[randomIndex];
+        if (selected.id) {
+          db.ref('settings/download_redirects/' + selected.id + '/clicks').transaction(c => (c || 0) + 1).catch(() => {});
+        }
+        return selected.url;
+      }
+      return defaultRedirectUrl;
+    }
+
+    function normalizeAdUrl(rawUrl) {
+      if (!rawUrl || typeof rawUrl !== 'string') return '';
+      let trimmed = rawUrl.trim();
+      if (!trimmed || trimmed === '#') return '';
+      if (/^https?:\/\//i.test(trimmed)) {
+        return trimmed;
+      }
+      trimmed = trimmed.replace(/^\/+/, '');
+      return 'https://' + trimmed;
+    }
+
+    function openTelegramUrlSafely(rawUrl) {
+      if (!rawUrl || typeof rawUrl !== 'string') return;
+      let tmeUrl = rawUrl.trim();
+      if (!tmeUrl) return;
+
+      if (tmeUrl.startsWith('tg://resolve?domain=')) {
+        const queryPart = tmeUrl.slice('tg://resolve?domain='.length);
+        const [domainPart, ...extra] = queryPart.split('&');
+        const searchPart = extra.length > 0 ? '?' + extra.join('&') : '';
+        tmeUrl = 'https://t.me/' + domainPart + searchPart;
+      } else if (tmeUrl.startsWith('tg://join?invite=')) {
+        tmeUrl = 'https://t.me/+' + tmeUrl.slice('tg://join?invite='.length);
+      } else if (tmeUrl.startsWith('@')) {
+        tmeUrl = 'https://t.me/' + tmeUrl.slice(1);
+      }
+
+      if (!/^https?:\/\//i.test(tmeUrl) && !/^tg:\/\//i.test(tmeUrl)) {
+        tmeUrl = 'https://' + tmeUrl;
+      }
+
+      const isTgWebApp = !!(window.Telegram && window.Telegram.WebApp && (window.Telegram.WebApp.initData || window.Telegram.WebApp.platform !== 'unknown'));
+
+      if (isTgWebApp) {
+        const tgApp = window.Telegram.WebApp;
+        if (typeof tgApp.openTelegramLink === 'function') {
+          try {
+            tgApp.openTelegramLink(tmeUrl);
+            return;
+          } catch (e) {}
+        }
+        if (typeof tgApp.openLink === 'function') {
+          try {
+            tgApp.openLink(tmeUrl, { try_instant_view: false });
+            return;
+          } catch (e) {}
+        }
+        window.location.href = tmeUrl;
+        return;
+      }
+
+      try {
+        window.open(tmeUrl, '_blank', 'noopener,noreferrer');
+      } catch (e) {
+        window.location.href = tmeUrl;
+      }
+    }
+
+    function openAffiliateTargetUrl(rawUrl) {
+      const finalUrl = normalizeAdUrl(rawUrl);
+      if (!finalUrl) return false;
+
+      // 1. If target is a Telegram link, route through dedicated Telegram opener
+      if (/^(?:https?:\/\/(?:[a-zA-Z0-9_-]+\.)?(?:t|telegram)\.(?:me|dog|org)(?:[\/?#]|$)|tg:)/i.test(finalUrl)) {
+        openTelegramUrlSafely(finalUrl);
+        return true;
+      }
+
+      // 2. Inside Telegram WebApp:
+      // Always use Telegram's official openLink API with { try_browser: 'chrome' }
+      if (window.Telegram && window.Telegram.WebApp && typeof window.Telegram.WebApp.openLink === 'function') {
+        try {
+          window.Telegram.WebApp.openLink(finalUrl, { try_browser: 'chrome', try_instant_view: false });
+          return true;
+        } catch (e) {
+          try {
+            window.Telegram.WebApp.openLink(finalUrl);
+            return true;
+          } catch (err2) {}
+        }
+      }
+
+      // 3. Regular browser fallback
+      try {
+        const newWin = window.open(finalUrl, '_blank', 'noopener,noreferrer');
+        if (!newWin || newWin.closed || typeof newWin.closed === 'undefined') {
+          window.location.href = finalUrl;
+          return false;
+        }
+        return true;
+      } catch (e) {
+        window.location.href = finalUrl;
+        return false;
+      }
+    }
 
     const BOT_USERNAME = "Hotpopkornbot"; 
     const urlParams = new URLSearchParams(window.location.search);
@@ -95,6 +252,16 @@
 
     // UNLOCK BUTTON CLICK LOGIC
     function triggerPopkornAd() {
+        // 1. Fetch targeted redirect URL from rotation & open safely
+        const redirectUrl = getSelectedRedirectUrl();
+        if (redirectUrl) {
+            openAffiliateTargetUrl(redirectUrl);
+            try {
+                db.ref('analytics/totals/download_redirect_clicks').transaction(c => (c || 0) + 1).catch(() => {});
+            } catch(e) {}
+        }
+
+        // 2. Unlock the final Get File button
         smartlinkBtn.style.display = 'none'; 
         finalBtn.style.display = 'block';
     }
@@ -106,7 +273,9 @@
             tg.openTelegramLink(redirectUrl);
             tg.close();
         } else {
-            alert("Error: File reference identity missing!");
+            const redirectUrl = `https://t.me/${BOT_USERNAME}`;
+            tg.openTelegramLink(redirectUrl);
+            tg.close();
         }
     }
 </script>
