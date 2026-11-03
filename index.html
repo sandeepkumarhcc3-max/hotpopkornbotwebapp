@@ -52,9 +52,167 @@
         }
         .btn-smartlink { background-color: #ff9f0a; color: white; }
         .btn-final { background-color: #30d158; color: white; }
+
+        /* POPUP MODAL OVERLAY */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .ad-modal-card {
+            background: #ffffff;
+            color: #0f172a;
+            border-radius: 20px;
+            padding: 18px 16px;
+            max-width: 320px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            text-align: center;
+            position: relative;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+            animation: popIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes popIn {
+            0% { opacity: 0; transform: scale(0.92); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        .popup-top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            min-height: 28px;
+            margin-bottom: 8px;
+        }
+        .popup-timer-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #f1f5f9;
+            color: #475569;
+            border: 1px solid #e2e8f0;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .timer-ring-spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid #cbd5e1;
+            border-top-color: #0284c7;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .popup-skip-btn {
+            background: #f1f5f9;
+            color: #0f172a;
+            border: 1px solid #cbd5e1;
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 12px;
+            font-weight: 800;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s;
+        }
+        .popup-skip-btn:hover, .popup-skip-btn:active {
+            background: #e2e8f0;
+            transform: scale(0.96);
+        }
+        .popup-product-img {
+            width: 100%;
+            max-height: min(180px, 32vh);
+            object-fit: contain;
+            border-radius: 12px;
+            margin: 4px auto 14px auto;
+            display: block;
+            background: #f8fafc;
+        }
+        .popup-product-title {
+            font-size: 15px;
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1.35;
+            margin-bottom: 6px;
+        }
+        .popup-brand-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 16px;
+        }
+        .popup-cta-btn {
+            width: 100%;
+            padding: 12px;
+            background: #0284c7;
+            color: #ffffff;
+            border: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 800;
+            cursor: pointer;
+            text-decoration: none;
+            display: block;
+            box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
+            transition: transform 0.15s, background 0.15s;
+        }
+        .popup-cta-btn:active {
+            transform: scale(0.98);
+            background: #0369a1;
+        }
     </style>
 </head>
 <body>
+
+<!-- CUSTOM AFFILIATE POPUP AD (10s SKIP LOCK) -->
+<div id="affiliate-popup-modal" class="modal-overlay" style="display: none;">
+  <div class="ad-modal-card">
+    <div class="popup-top-bar">
+      <!-- Timer pill while countdown runs -->
+      <div id="popup-timer-badge" class="popup-timer-pill" style="display: inline-flex;">
+        <div class="timer-ring-spinner"></div>
+        <span>Skip in <b id="popup-countdown-sec">10</b>s</span>
+      </div>
+      <!-- Skip button when unlocked -->
+      <button id="popup-skip-action-btn" class="popup-skip-btn" style="display: none;" onclick="closeAffiliatePopupAd()">
+        Skip ✕
+      </button>
+    </div>
+
+    <!-- Product Creative Image -->
+    <img id="popup-img" class="popup-product-img" src="" alt="Affiliate Product" onclick="handlePopupAdCtaClick()" style="cursor: pointer;" />
+
+    <!-- Title & Headline -->
+    <div id="popup-title" class="popup-product-title">Featured Offer</div>
+
+    <!-- Brand / Store Attribution -->
+    <div class="popup-brand-badge">
+      <span id="popup-brand-icon">🛒</span>
+      <span id="popup-brand-name">Affiliate Store Partner</span>
+    </div>
+
+    <!-- CTA Button -->
+    <button id="popup-cta-button" class="popup-cta-btn" onclick="handlePopupAdCtaClick()">
+      See Product
+    </button>
+  </div>
+</div>
 
 <div class="container">
     <h2>File Downloader</h2>
@@ -62,7 +220,7 @@
     
     <div id="timer-section" class="status">
         Checking secure link... <br>
-        <span id="countdown" class="timer">25</span> seconds
+        <span id="countdown" class="timer">20</span> seconds
     </div>
 
     <button id="smartlink-btn" class="btn btn-smartlink" onclick="triggerPopkornAd()">🔓 Unlock Your File</button>
@@ -227,18 +385,144 @@
       }
     }
 
+    // -------------------------------------------------------------
+    // 3. POPUP ADS ENGINE (Instant Display with 10s Skip Lock)
+    // -------------------------------------------------------------
+    let loadedPopupAds = [];
+    let currentActivePopupAd = null;
+    let popupSkipTimer = null;
+    let hasShownPopupAd = false;
+
+    // Load cached popup ads for zero-latency instant display
+    try {
+      const cachedAds = localStorage.getItem('_pk_bot_popup_ads');
+      if (cachedAds) {
+        loadedPopupAds = JSON.parse(cachedAds) || [];
+      }
+    } catch(e) {}
+
+    function processIncomingAds(rawAds) {
+      if (!rawAds || typeof rawAds !== 'object') return;
+      const list = [];
+      Object.entries(rawAds).forEach(([id, ad]) => {
+        if (ad && ad.type === 'popup' && ad.active !== false) {
+          list.push({ id, ...ad });
+        }
+      });
+      if (list.length > 0) {
+        loadedPopupAds = list;
+        try { localStorage.setItem('_pk_bot_popup_ads', JSON.stringify(list)); } catch(e) {}
+        if (!hasShownPopupAd) {
+          triggerPopupAd();
+        }
+      }
+    }
+
+    db.ref('analytics/ad_system/ads').on('value', snap => processIncomingAds(snap.val()));
+    db.ref('ads').on('value', snap => processIncomingAds(snap.val()));
+
+    function pickWeightedAd(adList) {
+      if (!adList || adList.length === 0) return null;
+      if (adList.length === 1) return adList[0];
+
+      const pool = [];
+      adList.forEach(ad => {
+        const weight = Math.max(1, parseInt(ad.priority) || 5);
+        for (let i = 0; i < weight; i++) {
+          pool.push(ad);
+        }
+      });
+
+      const randomIndex = Math.floor(Math.random() * pool.length);
+      return pool[randomIndex];
+    }
+
+    function triggerPopupAd() {
+      if (hasShownPopupAd || loadedPopupAds.length === 0) return;
+      currentActivePopupAd = pickWeightedAd(loadedPopupAds);
+      if (!currentActivePopupAd) return;
+      hasShownPopupAd = true;
+
+      const modal = document.getElementById('affiliate-popup-modal');
+      const img = document.getElementById('popup-img');
+      const title = document.getElementById('popup-title');
+      const brand = document.getElementById('popup-brand-name');
+      const ctaBtn = document.getElementById('popup-cta-button');
+      const timerBadge = document.getElementById('popup-timer-badge');
+      const countdownSec = document.getElementById('popup-countdown-sec');
+      const skipBtn = document.getElementById('popup-skip-action-btn');
+
+      if (img) img.src = currentActivePopupAd.image_url || '';
+      if (title) title.innerText = currentActivePopupAd.title || 'Featured Offer';
+      if (brand) brand.innerText = currentActivePopupAd.brand_tag || 'Affiliate Partner';
+      if (ctaBtn) ctaBtn.innerText = currentActivePopupAd.btn_text || 'See Product';
+
+      if (timerBadge) timerBadge.style.display = 'inline-flex';
+      if (skipBtn) skipBtn.style.display = 'none';
+      if (countdownSec) countdownSec.innerText = '10';
+      if (modal) modal.style.display = 'flex';
+
+      // Track Impression in Firebase
+      if (currentActivePopupAd.id) {
+        db.ref('analytics/ad_system/ads/' + currentActivePopupAd.id + '/impressions').transaction(c => (c || 0) + 1).catch(() => {});
+      }
+
+      // 10-Second Skip Lock Timer
+      let skipTime = 10;
+      if (popupSkipTimer) clearInterval(popupSkipTimer);
+      popupSkipTimer = setInterval(() => {
+        skipTime--;
+        if (countdownSec) countdownSec.innerText = skipTime;
+        if (skipTime <= 0) {
+          clearInterval(popupSkipTimer);
+          popupSkipTimer = null;
+          if (timerBadge) timerBadge.style.display = 'none';
+          if (skipBtn) skipBtn.style.display = 'inline-flex';
+        }
+      }, 1000);
+    }
+
+    function closeAffiliatePopupAd() {
+      if (popupSkipTimer) {
+        clearInterval(popupSkipTimer);
+        popupSkipTimer = null;
+      }
+      const modal = document.getElementById('affiliate-popup-modal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function handlePopupAdCtaClick() {
+      if (!currentActivePopupAd) return;
+      const targetUrl = currentActivePopupAd.target_url || currentActivePopupAd.url;
+      if (targetUrl) {
+        if (currentActivePopupAd.id) {
+          db.ref('analytics/ad_system/ads/' + currentActivePopupAd.id + '/clicks').transaction(c => (c || 0) + 1).catch(() => {});
+        }
+        openAffiliateTargetUrl(targetUrl);
+      }
+      closeAffiliatePopupAd();
+    }
+
+    // Trigger popup ad immediately if cached ads exist
+    if (loadedPopupAds.length > 0) {
+      triggerPopupAd();
+    }
+
+    // -------------------------------------------------------------
+    // 4. MAIN 20-SECOND COUNTDOWN & UNLOCK LOGIC
+    // -------------------------------------------------------------
     const BOT_USERNAME = "Hotpopkornbot"; 
     const urlParams = new URLSearchParams(window.location.search);
     const fileId = urlParams.get('fid');
 
-    // Timer ko 10 se badalkar 25 kar diya gaya hai
-    let timeLeft = 25;
+    // Timer ko 20 seconds kar diya gaya hai
+    let timeLeft = 20;
     const countdownEl = document.getElementById('countdown');
     const timerSection = document.getElementById('timer-section');
     const smartlinkBtn = document.getElementById('smartlink-btn');
     const finalBtn = document.getElementById('final-btn');
 
-    // 25 Second Timer Logic
+    // 20 Second Timer Logic
     const timer = setInterval(() => {
         timeLeft--;
         countdownEl.innerText = timeLeft;
